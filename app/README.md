@@ -103,3 +103,11 @@ pip3 freeze > requirements.txt
 deactivate
 ```
 
+## Jena Fuseki
+```
+cd ~/Downloads
+curl -LO https://dlcdn.apache.org/jena/binaries/apache-jena-fuseki-5.4.0.tar.gz
+tar -xzf apache-jena-fuseki-5.4.0.tar.gz --strip-components=1
+./fuseki-server
+```
+
