@@ -79,6 +79,9 @@ pip install <package_name>
 ```zsh
 pip install boto3 flask rdflib SPARQLWrapper
 ```
+```zsh
+pip3 freeze > requirements.txt
+```
 ### VS Code (macOS)
 * Install Python Extension for VS Code
   * Go to Extensions
