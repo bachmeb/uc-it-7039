@@ -77,7 +77,7 @@ python3 -m pip install --upgrade pip
 pip install <package_name>
 ```
 ```zsh
-pip install boto3 flask rdflib SPARQLWrapper
+pip install boto3 flask gunicorn rdflib SPARQLWrapper
 ```
 ```zsh
 pip3 freeze > requirements.txt
