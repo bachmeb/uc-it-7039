@@ -20,12 +20,21 @@ def home():
     </head>
     <body>
         <h1>Ontology Web App</h1>
+        <h2>Ontology</h2>
         <ul>    
             <li><a href="/upload">Upload OWL File</a></li>
             <li><a href="/view">View Last Uploaded OWL</a></li>
             <li><a href="/edit">Edit Class Name</a></li>
             <li><a href="/add">Add New Class</a></li>
+            <li><a href="/download">Download OWL File</a></li>
+        </ul>
+        <h2>Jena Fuseki Database</h2>        
+        <ul>    
             <li><a href="/fuseki/list">List all triples in Jena Fuseki database</a></li>
+            <li><a href="/fuseki/add">Add New Class to Fuseki</a></li>
+            <li><a href="/fuseki/clear">Clear all triples in Fuseki</a></li>
+            <li><a href="/fuseki/load">Load Ontology File into Fuseki</a></li>
+            <li><a href="/fuseki/download">Download Fuseki data as Ontology File</a></li>
         </ul>
     </body>
     </html>
@@ -109,7 +118,6 @@ def view_ontology():
     response += "</ul>"
 
     response += """
-        <br><a href="/download">Download OWL File</a><br>
         <a href="/">Back to Home</a>
     </body>
     </html>
@@ -297,7 +305,15 @@ def jena_list():
     results = json.loads(response.data.decode("utf-8"))
 
     # Build HTML response
-    html = "<h1>Triples from Fuseki /ds Dataset</h1><table border='1'>"
+    html = """
+    <html>
+    <head>
+        <title>Ontology Web App</title>
+        <link rel="stylesheet" type="text/css" href="/static/style.css">
+    </head>
+    <body>
+    """
+    html += "<h1>Triples from Fuseki /ds Dataset</h1><table border='1'>"
     html += "<tr><th>Subject</th><th>Predicate</th><th>Object</th></tr>"
 
     for binding in results["results"]["bindings"]:
@@ -307,8 +323,206 @@ def jena_list():
         html += f"<tr><td>{s}</td><td>{p}</td><td>{o}</td></tr>"
 
     html += "</table><br><a href='/'>Back to Home</a>"
-
+    html += """
+    </body>
+    </html>
+    """
     return html
+
+
+@app.route("/fuseki/add", methods=["GET", "POST"])
+def jena_add_class():
+    if request.method == "POST":
+        new_class_localname = request.form.get("new_class")
+
+        if not new_class_localname:
+            return "New class name is required."
+
+        # Build SPARQL INSERT query
+        fuseki_endpoint = "http://localhost:3030/ds/update"
+
+        base_uri = "http://example.org/"  # <-- You could also make this user-configurable if you want
+        new_class_uri = base_uri + new_class_localname
+
+        insert_query = f"""
+        PREFIX owl: <http://www.w3.org/2002/07/owl#>
+        INSERT DATA {{
+            <{new_class_uri}> a owl:Class .
+        }}
+        """
+
+        http = urllib3.PoolManager()
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+
+        response = http.request(
+            "POST",
+            fuseki_endpoint,
+            body=urllib3.request.urlencode({"update": insert_query}),
+            headers=headers
+        )
+
+        if response.status != 200:
+            return f"Failed to add class to Fuseki: {response.status} {response.data.decode('utf-8')}"
+
+        return redirect(url_for('jena_list'))
+
+    # If GET, show form
+    return '''
+    <html>
+    <head>
+        <title>Ontology Web App</title>
+        <link rel="stylesheet" type="text/css" href="/static/style.css">
+    </head>
+    <body>
+        <h1>Add New Class to Fuseki</h1>
+        <form method="post">
+            New Class Name (local part after base URI): 
+            <input type="text" name="new_class" placeholder="NewClassName">
+            <input type="submit" value="Add Class">
+        </form>
+        <a href="/">Back to Home</a>
+    </body>
+    </html>
+    '''
+
+
+@app.route("/fuseki/clear", methods=["GET", "POST"])
+def jena_clear_dataset():
+    if request.method == "POST":
+        fuseki_endpoint = "http://localhost:3030/ds/update"
+
+        delete_query = """
+        DELETE WHERE { ?s ?p ?o }
+        """
+
+        http = urllib3.PoolManager()
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+
+        response = http.request(
+            "POST",
+            fuseki_endpoint,
+            body=urllib3.request.urlencode({"update": delete_query}),
+            headers=headers
+        )
+
+        if response.status != 200:
+            return f"Failed to clear dataset: {response.status} {response.data.decode('utf-8')}"
+
+        return redirect(url_for('jena_list'))
+
+    # If GET, show a confirmation form
+    return '''
+    <html>
+    <head>
+        <title>Clear Dataset</title>
+        <link rel="stylesheet" type="text/css" href="/static/style.css">
+    </head>
+    <body>
+        <h1>Clear All Triples in Fuseki Dataset</h1>
+        <form method="post">
+            <p style="color: red;">Warning: This will delete <strong>everything</strong> in the dataset!</p>
+            <input type="submit" value="Confirm Clear">
+        </form>
+        <a href="/">Back to Home</a>
+    </body>
+    </html>
+    '''
+
+
+@app.route("/fuseki/load", methods=["GET", "POST"])
+def jena_load_ontology():
+    if request.method == "POST":
+        try:
+            with open(os.path.join(UPLOAD_FOLDER, "last_uploaded.txt"), "r") as f:
+                filename = f.read().strip()
+        except FileNotFoundError:
+            return "No file uploaded yet."
+
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        g = Graph()
+        g.parse(filepath)
+
+        # Serialize to N-Triples format (easier for SPARQL UPDATE)
+        data = g.serialize(format="nt")
+
+        fuseki_endpoint = "http://localhost:3030/ds/update"
+
+        insert_query = "INSERT DATA { " + data + " }"
+
+        http = urllib3.PoolManager()
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+
+        response = http.request(
+            "POST",
+            fuseki_endpoint,
+            body=urllib3.request.urlencode({"update": insert_query}),
+            headers=headers
+        )
+
+        if response.status != 200:
+            return f"Failed to load ontology into Fuseki: {response.status} {response.data.decode('utf-8')}"
+
+        return redirect(url_for('jena_list'))
+
+    # If GET, show a confirmation form
+    return '''
+    <html>
+    <head>
+        <title>Load Ontology to Fuseki</title>
+        <link rel="stylesheet" type="text/css" href="/static/style.css">
+    </head>
+    <body>
+        <h1>Load Ontology into Jena Fuseki</h1>
+        <form method="post">
+            <p style="color: green;">This will load the last uploaded OWL file into Fuseki.</p>
+            <input type="submit" value="Load Ontology">
+        </form>
+        <a href="/">Back to Home</a>
+    </body>
+    </html>
+    '''
+
+@app.route("/fuseki/download")
+def jena_download_ontology():
+    fuseki_endpoint = "http://localhost:3030/ds/query"
+
+    construct_query = """
+    CONSTRUCT { ?s ?p ?o }
+    WHERE { ?s ?p ?o }
+    """
+
+    http = urllib3.PoolManager()
+
+    headers = {
+        "Accept": "application/rdf+xml",  # OWL/RDF XML format
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+
+    response = http.request(
+        "POST",
+        fuseki_endpoint,
+        body=urllib3.request.urlencode({"query": construct_query}),
+        headers=headers
+    )
+
+    if response.status != 200:
+        return f"Failed to fetch ontology from Fuseki: {response.status} {response.data.decode('utf-8')}"
+
+    # Save the ontology to a temporary file
+    output_path = os.path.join(UPLOAD_FOLDER, "fuseki_export.owl")
+    with open(output_path, "wb") as f:
+        f.write(response.data)
+
+    return send_file(output_path, as_attachment=True, download_name="ontology.owl")
 
 
 if __name__ == "__main__":

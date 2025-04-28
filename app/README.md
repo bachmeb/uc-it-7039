@@ -71,7 +71,7 @@ python --version
 pip3 --version
 ```
 ```zsh
-python3 -m pip install --upgrade pip
+python3 -m pip install --upgrade pip --trusted-host pypi.org --trusted-host files.pythonhosted.org
 ```
 ```zsh
 pip install <package_name>
