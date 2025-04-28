@@ -268,6 +268,7 @@ def add_class():
     </html>
     '''
 
+
 @app.route("/fuseki/list")
 def jena_list():
     fuseki_endpoint = "http://localhost:3030/ds/query"
@@ -282,20 +283,15 @@ def jena_list():
 
     http = urllib3.PoolManager()
 
-    encoded_query = {
-        "query": query
-    }
-
     headers = {
-        "Accept": "application/sparql-results+json",
-        "Content-Type": "application/x-www-form-urlencoded"
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/sparql-results+json"
     }
 
-    # Send the POST request to Fuseki
     response = http.request(
         "POST",
         fuseki_endpoint,
-        body=urllib3.request.urlencode(encoded_query),
+        body=f"query={query}",
         headers=headers
     )
 
@@ -310,11 +306,40 @@ def jena_list():
     <head>
         <title>Ontology Web App</title>
         <link rel="stylesheet" type="text/css" href="/static/style.css">
+        <style>
+            th {
+                cursor: pointer;
+                background-color: #333; /* Darker background */
+                color: white;           /* White text */
+                padding: 8px;
+                font-size: 16px;
+            }
+            th.sorted-asc {
+                background-color: #4CAF50; /* Green for ascending */
+                color: white;
+            }
+            th.sorted-desc {
+                background-color: #F44336; /* Red for descending */
+                color: white;
+            }
+            td {
+                padding: 8px;
+                font-size: 14px;
+            }
+        </style>
     </head>
     <body>
+        <h1>Triples from Fuseki /ds Dataset</h1>
+        <table border='1' id="triplesTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTable(0)">Subject</th>
+                    <th onclick="sortTable(1)">Predicate</th>
+                    <th onclick="sortTable(2)">Object</th>
+                </tr>
+            </thead>
+            <tbody>
     """
-    html += "<h1>Triples from Fuseki /ds Dataset</h1><table border='1'>"
-    html += "<tr><th>Subject</th><th>Predicate</th><th>Object</th></tr>"
 
     for binding in results["results"]["bindings"]:
         s = binding["s"]["value"]
@@ -322,12 +347,63 @@ def jena_list():
         o = binding["o"]["value"]
         html += f"<tr><td>{s}</td><td>{p}</td><td>{o}</td></tr>"
 
-    html += "</table><br><a href='/'>Back to Home</a>"
     html += """
+            </tbody>
+        </table>
+        <br><a href='/'>Back to Home</a>
+
+        <script>
+            let sortDirection = {};  // Track sort direction for each column
+
+            function sortTable(n) {
+                const table = document.getElementById("triplesTable");
+                let switching = true;
+                let dir = sortDirection[n] === "asc" ? "desc" : "asc";
+                sortDirection[n] = dir;
+                let rows, i, x, y, shouldSwitch;
+
+                while (switching) {
+                    switching = false;
+                    rows = table.rows;
+                    for (i = 1; i < (rows.length - 1); i++) {
+                        shouldSwitch = false;
+                        x = rows[i].getElementsByTagName("TD")[n];
+                        y = rows[i + 1].getElementsByTagName("TD")[n];
+                        if (dir === "asc" && x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                        if (dir === "desc" && x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    }
+                    if (shouldSwitch) {
+                        rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                        switching = true;
+                    }
+                }
+
+                // Reset all headers
+                const headers = table.getElementsByTagName("TH");
+                for (let j = 0; j < headers.length; j++) {
+                    headers[j].classList.remove("sorted-asc", "sorted-desc");
+                }
+                // Highlight sorted column
+                if (dir === "asc") {
+                    headers[n].classList.add("sorted-asc");
+                } else {
+                    headers[n].classList.add("sorted-desc");
+                }
+            }
+        </script>
+
     </body>
     </html>
     """
+
     return html
+
 
 
 @app.route("/fuseki/add", methods=["GET", "POST"])
