@@ -20,10 +20,10 @@ pyenv versions
 pyenv install --list
 ```
 ```zsh
-pyenv install --list | grep 3.12
+pyenv install --list | grep 3.9.21
 ```
 ```zsh
-pyenv install 3.12.10
+pyenv install 3.9.21
 ```
 ```zsh
 cat ~/.zshrc
@@ -44,7 +44,7 @@ source ~/.zshrc
 python3 --version
 ```
 ```zsh
-pyenv local 3.12.10
+pyenv local 3.9.21
 ```
 ```zsh
 python3 --version
@@ -77,7 +77,7 @@ python3 -m pip install --upgrade pip
 pip install <package_name>
 ```
 ```zsh
-pip install boto3 flask gunicorn rdflib SPARQLWrapper
+pip3 install --trusted-host pypi.org --trusted-host files.pythonhosted.org boto3 flask gunicorn rdflib SPARQLWrapper
 ```
 ```zsh
 pip3 freeze > requirements.txt
