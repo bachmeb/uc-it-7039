@@ -35,6 +35,7 @@ def home():
             <li><a href="/fuseki/clear">Clear all triples in Fuseki</a></li>
             <li><a href="/fuseki/load">Load Ontology File into Fuseki</a></li>
             <li><a href="/fuseki/download">Download Fuseki data as Ontology File</a></li>
+            <li><a href="/fuseki/graph">Visualize the Fuseki Graph Database</a></li>
         </ul>
     </body>
     </html>
@@ -599,6 +600,108 @@ def jena_download_ontology():
         f.write(response.data)
 
     return send_file(output_path, as_attachment=True, download_name="ontology.owl")
+
+
+@app.route("/fuseki/graph")
+def jena_graph():
+    fuseki_endpoint = "http://localhost:3030/ds/query"
+
+    query = """
+    SELECT ?s ?p ?o
+    WHERE {
+      ?s ?p ?o
+    }
+    LIMIT 100
+    """
+
+    http = urllib3.PoolManager()
+
+    headers = {
+        "Accept": "application/sparql-results+json",
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+
+    response = http.request(
+        "POST",
+        fuseki_endpoint,
+        body=urllib3.request.urlencode({"query": query}),
+        headers=headers
+    )
+
+    if response.status != 200:
+        return f"Failed to query Fuseki: {response.status} {response.data.decode('utf-8')}"
+
+    results = json.loads(response.data.decode("utf-8"))
+
+    nodes = {}
+    edges = []
+
+    for binding in results["results"]["bindings"]:
+        s = binding["s"]["value"]
+        p = binding["p"]["value"]
+        o = binding["o"]["value"]
+
+        # Add subject and object nodes if not already present
+        if s not in nodes:
+            nodes[s] = {"id": s, "label": s}
+        if o not in nodes:
+            nodes[o] = {"id": o, "label": o}
+
+        # Add edge
+        edges.append({"from": s, "to": o, "label": p})
+
+    # Build the HTML
+    html = """
+    <html>
+    <head>
+        <title>Graph Visualization</title>
+        <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+        <style>
+            #mynetwork {
+                width: 100%;
+                height: 800px;
+                border: 1px solid lightgray;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Graph Visualization</h1>
+        <div id="mynetwork"></div>
+        <script type="text/javascript">
+            var nodes = new vis.DataSet(""" + json.dumps(list(nodes.values())) + """);
+            var edges = new vis.DataSet(""" + json.dumps(edges) + """);
+
+            var container = document.getElementById('mynetwork');
+            var data = {
+                nodes: nodes,
+                edges: edges
+            };
+            var options = {
+                nodes: {
+                    shape: 'dot',
+                    size: 20,
+                    font: { size: 14, color: 'black' }
+                },
+                edges: {
+                    arrows: { to: { enabled: true } },
+                    font: { align: 'middle', size: 10 }
+                },
+                physics: {
+                    enabled: true,
+                    barnesHut: {
+                        gravitationalConstant: -30000,
+                        springLength: 100
+                    }
+                }
+            };
+            var network = new vis.Network(container, data, options);
+        </script>
+        <br><a href="/">Back to Home</a>
+    </body>
+    </html>
+    """
+
+    return html
 
 
 if __name__ == "__main__":
